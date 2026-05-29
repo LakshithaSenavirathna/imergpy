@@ -1,0 +1,12 @@
+include imergpy/templates/*.html
+include imergpy/static/*
+include LICENSE
+include README.md
+recursive-include examples *.py
+recursive-include tests *.py
+global-exclude __pycache__/*
+global-exclude *.py[cod]
+global-exclude *.xlsx
+global-exclude *.nc
+global-exclude *.nc4
+global-exclude .env

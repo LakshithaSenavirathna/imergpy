@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>imergpy - NASA IMERG Downloader</title>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --glow-color-white: rgba(255, 255, 255, 0.28);
+            --glow-color-blue: rgba(0, 200, 255, 0.5);
+            --sun-color: #ffcc00;
+            --moon-color: #e0e0e0;
+            --success-color: #00ff00;
+        }
+
+        body { background-color: #0b0c10; color: #e8eef6; min-height: 100vh; display: flex; flex-direction: column; margin: 0; transition: background-color 0.3s, color 0.3s; overflow-x: hidden; position: relative; font-family: "Public Sans", Arial, Helvetica, sans-serif; }
+        body.dark-theme .text-muted { color: #c9d4e2 !important; }
+        body.dark-theme .form-label, body.dark-theme h1, body.dark-theme h2, body.dark-theme h3, body.dark-theme h4, body.dark-theme p { color: #f4f8ff; }
+        body:not(.dark-theme) .text-muted { color: #334155 !important; }
+        
+        /* Intro Animation */
+        #intro-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.8s ease-out, visibility 0.8s;
+            transition-delay: 1.5s; /* Keep visible longer */
+        }
+        #intro-screen h2 { color: #fff; text-shadow: 0 0 14px rgba(13, 202, 240, 0.35); animation: pulseText 2s infinite alternate; }
+        #intro-screen p { color: rgba(255,255,255,0.7); text-shadow: none; animation: pulseText 2s infinite alternate; }
+        .intro-logo {
+            max-width: 300px;
+            animation: pulseLogo 2.5s infinite alternate;
+            filter: drop-shadow(0 0 35px rgba(255, 255, 255, 0.48)) drop-shadow(0 0 70px rgba(13, 202, 240, 0.45));
+            margin-bottom: 20px;
+        }
+        @keyframes pulseLogo { 0% { opacity: 0.88; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1.02); } }
+        @keyframes pulseText { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        #starfield { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+
+        /* BRIGHT CELESTIAL BODIES */
+        #celestial-body {
+            position: fixed; top: 40%; right: 5%; width: 200px; height: 200px; border-radius: 50%; z-index: 0;
+            transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.5s ease-out, background-color 0.5s, box-shadow 0.5s;
+            opacity: 0; transform: translateY(-150px); pointer-events: none;
+        }
+        body.scrolled #celestial-body { opacity: 1; transform: translateY(0); }
+        
+        /* Moon - Ultra Bright Blue/White Glow */
+        body.dark-theme #celestial-body {
+            background-color: var(--moon-color);
+            box-shadow: 
+                0 0 150px 75px var(--glow-color-white), 
+                0 0 300px 150px var(--glow-color-blue), 
+                inset -30px -30px 60px rgba(0,0,0,0.4); 
+        }
+        /* Sun - Extreme Radiant Glow */
+        body:not(.dark-theme) #celestial-body {
+            background-color: var(--sun-color);
+            box-shadow: 
+                0 0 200px 100px var(--sun-color), 
+                0 0 400px 200px rgba(255, 140, 0, 0.7), 
+                inset -25px -25px 50px rgba(255, 255, 255, 0.8);
+        }
+
+        .container-main { 
+            flex: 1; max-width: 1400px; width: 95%; margin: 40px auto; 
+            background: rgba(20, 24, 28, 0.95); padding: 45px; border-radius: 15px; 
+            border: 1px solid #333; backdrop-filter: blur(15px);
+            box-shadow: 0 15px 50px rgba(0,0,0,0.6); z-index: 1; position: relative; 
+        }
+        body:not(.dark-theme) .container-main { background: white; color: #111; border: none; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+        
+        /* HEADER & LOGO */
+        .header-box { display: flex; align-items: center; justify-content: flex-start; margin-bottom: 3rem; }
+        .logo-wrapper { 
+            position: relative; margin-right: 35px; display: flex; align-items: center; justify-content: center;
+        }
+        .logo-bg-glow {
+            position: absolute; width: 170px; height: 170px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.28) 0%, rgba(13, 202, 240, 0.24) 42%, transparent 72%);
+            filter: blur(24px); z-index: -1; animation: none;
+        }
+        .header-box img { max-height: 130px; filter: drop-shadow(0 0 22px rgba(255,255,255,0.42)) drop-shadow(0 0 42px rgba(13, 202, 240, 0.32)); }
+        .header-text { text-align: left; }
+        .brand-title {
+            color: #fff;
+            text-shadow:
+                -1px -1px 0 #000,
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 0 18px rgba(13, 202, 240, 0.45);
+        }
+        body:not(.dark-theme) .brand-title { color: #111827; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 0 6px rgba(0,0,0,0.25); }
+        .header-subtitle {
+            color: #ffffff;
+            font-weight: 700;
+            text-shadow:
+                -1px -1px 0 #000,
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 0 10px rgba(255,255,255,0.18);
+        }
+        body:not(.dark-theme) .header-subtitle { color: #1f2937; text-shadow: 0 1px 0 rgba(255,255,255,0.8); }
+        .header-text h1 {
+            color: #fff !important;
+            text-shadow:
+                -1px -1px 0 #000,
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 0 18px rgba(13, 202, 240, 0.45);
+        }
+        .header-text p {
+            color: #fff !important;
+            font-weight: 700;
+            text-shadow:
+                -1px -1px 0 #000,
+                1px -1px 0 #000,
+                -1px 1px 0 #000,
+                1px 1px 0 #000,
+                0 0 10px rgba(255,255,255,0.18);
+        }
+        body:not(.dark-theme) .header-text h1 { color: #111827 !important; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0 0 6px rgba(0,0,0,0.25); }
+        body:not(.dark-theme) .header-text p { color: #1f2937 !important; text-shadow: 0 1px 0 rgba(255,255,255,0.8); }
+        @media (max-width: 768px) { .header-box { flex-direction: column; text-align: center; } .header-box img { margin-right: 0; margin-bottom: 20px; } .header-text { text-align: center; } }
+        
+        .footer { background: #050505; color: #e0e0e0; padding: 30px 0; text-align: center; border-top: 1px solid #333; position: relative; z-index: 1; }
+        
+        /* LOADING OVERLAY - Ensure it covers everything */
+        #loading { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.95); z-index: 9999; 
+            flex-direction: column; align-items: center; justify-content: center; 
+        }
+        .big-percent { 
+            font-size: 8rem; font-weight: 900; color: #0dcaf0; 
+            text-shadow: 0 0 40px var(--glow-color-blue), 0 0 80px rgba(13,202,240,0.4); 
+            margin: 20px 0; 
+        }
+        .progress-status { color: #cfefff; font-size: 1.25rem; margin-top: 20px; }
+        .build-label { position: fixed; right: 12px; bottom: 8px; z-index: 20; color: rgba(255,255,255,0.45); font-size: 12px; pointer-events: none; }
+        
+        /* RESULT BOX & CHART */
+        #result-box { display: none; margin-top: 35px; }
+        .result-card { font-size: 0.95rem; }
+        .result-card h1 { font-size: 1.35rem; margin-bottom: 1rem !important; }
+        .result-card h3 { font-size: 1.1rem; }
+        .result-card p { font-size: 0.95rem !important; margin-bottom: 0.75rem !important; }
+        .result-card code { font-size: 0.82rem; white-space: normal; word-break: break-all; }
+        .result-card .btn { font-size: 0.95rem !important; padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+        body.dark-theme .result-card { background: #101820; color: #eef6ff; border: 1px solid #335064 !important; }
+        body:not(.dark-theme) .result-card { background: #f8fafc; color: #111827; border: 1px solid #94a3b8 !important; }
+        #chart-wrapper { width: 100%; height: 480px; margin-top: 30px; background: rgba(0,0,0,0.4); border-radius: 12px; padding: 25px; border: 1px solid #444; position: relative; }
+        canvas#rainfallChart { width: 100% !important; height: 100% !important; }
+        
+        #map { height: 450px; border-radius: 12px; border: 1px solid #444; margin-bottom: 25px; }
+        .selection-mode-bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+        .selection-mode-card {
+            border: 1px solid #334155;
+            background: rgba(15, 23, 42, 0.86);
+            color: #f8fafc;
+            border-radius: 8px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+        .selection-mode-card:hover, .selection-mode-card.active {
+            border-color: #39ff14;
+            box-shadow: 0 0 18px rgba(57, 255, 20, 0.35);
+            transform: translateY(-1px);
+        }
+        .selection-mode-card input { margin-right: 8px; }
+        body:not(.dark-theme) .selection-mode-card { background: #fff; color: #111827; border-color: #94a3b8; }
+        .selection-panel { display: none; }
+        .selection-panel.active { display: block; }
+        .selection-note {
+            border: 1px solid rgba(13,202,240,0.35);
+            background: rgba(13,202,240,0.08);
+            color: #e8f8ff;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 16px;
+        }
+        body:not(.dark-theme) .selection-note { color: #0f172a; background: #e0f2fe; border-color: #7dd3fc; }
+        .area-readout .form-control[readonly], .country-readout .form-control[readonly] {
+            background: #101820;
+            color: #dffcff;
+            border-color: #39ff14;
+        }
+        body:not(.dark-theme) .area-readout .form-control[readonly], body:not(.dark-theme) .country-readout .form-control[readonly] {
+            background: #f8fafc;
+            color: #111827;
+        }
+        .theme-toggle { position: absolute; top: 20px; right: 30px; cursor: pointer; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 4px 10px; font-size: 28px; z-index: 1000; filter: drop-shadow(0 0 15px rgba(255,255,255,0.4)); }
+        body:not(.dark-theme) .theme-toggle { background: rgba(255,255,255,0.85); border-color: rgba(0,0,0,0.2); }
+        .info-hover-container { color: #0dcaf0; margin-left: 10px; font-weight: bold; font-size: 1.25rem; cursor: help; position: relative; display: inline-flex; align-items: center; justify-content: center;}
+        .info-hover-container { font-size: 0; }
+        .info-hover-container::before { content: "ℹ️"; font-size: 1.25rem; }
+        .info-hover-container:hover::after {
+            content: "Hover help: choose settings carefully before downloading IMERG data.";
+            position: absolute;
+            left: 50%;
+            bottom: 135%;
+            transform: translateX(-50%);
+            width: 280px;
+            background: #07111a;
+            color: #fff;
+            border: 1px solid #0dcaf0;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.9rem;
+            line-height: 1.35;
+            z-index: 30;
+        }
+        .info-hover-container[data-tip]:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            left: 50%;
+            bottom: 135%;
+            transform: translateX(-50%);
+            width: 280px;
+            background: #07111a;
+            color: #fff;
+            border: 1px solid #0dcaf0;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.9rem;
+            line-height: 1.35;
+            z-index: 30;
+        }
+        .info-hover-container:has(.tooltip-card):hover::after { display: none; }
+        .tooltip-card {
+            display: none;
+            position: absolute;
+            left: 50%;
+            bottom: 135%;
+            transform: translateX(-50%);
+            width: 360px;
+            background: #07111a;
+            color: #fff;
+            border: 1px solid #0dcaf0;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 0.88rem;
+            line-height: 1.35;
+            z-index: 40;
+            text-align: left;
+            font-weight: 500;
+        }
+        .info-hover-container:hover .tooltip-card { display: block; }
+        .tooltip-card strong { color: #7dd3fc; }
+        .tooltip-card ul { margin: 8px 0 0; padding-left: 18px; }
+        .tooltip-card li { margin-bottom: 6px; }
+        .tooltip-card .signup-link {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 7px 12px;
+            border-radius: 6px;
+            background: #0dcaf0;
+            color: #001018;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        .tooltip-card .signup-link:hover { text-decoration: none; background: #5eeaff; }
+        .info-hover-container .tooltip-card { pointer-events: auto; }
+        .info-hover-container:hover .tooltip-card, .tooltip-card:hover { display: block; }
+        .info-hover-box { visibility: hidden; opacity: 0; width: 360px; background-color: #212529; color: #fff; text-align: left; border-radius: 10px; padding: 20px; position: absolute; z-index: 10; bottom: 130%; left: 50%; transform: translateX(-50%); box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid #444; transition: opacity 0.3s; font-weight: normal; font-size: 1rem; }
+        .success-glow { 
+            color: var(--success-color); text-shadow: 0 0 40px var(--success-color), 0 0 80px rgba(0, 255, 0, 0.5); 
+            font-weight: 900; background: rgba(0,255,0,0.2); padding: 5px 15px; border-radius: 8px; border: 1px solid var(--success-color);
+        }
+
+        .progress { height: 40px; border-radius: 20px; background-color: #1a1d20; overflow: hidden; margin-top: 20px; border: 1px solid #444; box-shadow: inset 0 2px 5px rgba(0,0,0,0.6); }
+        .progress-bar { background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%); font-weight: 900; font-size: 1.2rem; text-shadow: 1px 1px 3px rgba(0,0,0,0.6); }
+        
+        hr { border-color: #444; opacity: 1; margin: 2.5rem 0; }
+        .form-control, .form-select { background: #1a1d20; color: #fff; border: 1px solid #444; padding: 14px 20px; font-size: 1.1rem; }
+        .form-control:focus, .form-select:focus { background: #212529; color: #fff; border-color: #0dcaf0; box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.3); }
+        .form-label { margin-bottom: 0.8rem; font-size: 1.1rem; }
+        body:not(.dark-theme) .form-control, body:not(.dark-theme) .form-select { background: #fff; color: #111827; border-color: #94a3b8; }
+        body.dark-theme .accordion-body, body.dark-theme .accordion-button, body.dark-theme .modal-content { color: #f8fafc !important; }
+        .info-hover-container::before { content: "\2139\FE0F" !important; font-size: 1.25rem; }
+        .info-hover-container:hover::after { content: attr(data-tip) !important; }
+        
+        .btn-primary { background: linear-gradient(45deg, #007bff, #0dcaf0); border: none; box-shadow: 0 5px 15px rgba(0,123,255,0.4); transition: all 0.3s ease; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,123,255,0.6); }
+        
+        a { color: #0dcaf0; text-decoration: none;}
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body class="dark-theme">
+
+<!-- Intro Animation - Improved Visibility -->
+<div id="intro-screen">
+    <div class="intro-glow-circle"></div>
+    <img src="{{ url_for('static', filename='logo.png') }}" class="intro-logo">
+    <h2 class="mt-4 fw-bold text-white">IMERGPY INTERFACE</h2>
+    <p class="text-white-50 fs-5 mt-2">Connecting to NASA Global Precipitation Mission...</p>
+</div>
+
+<canvas id="starfield"></canvas>
+<div id="celestial-body"></div>
+
+<button class="theme-toggle" id="themeToggle" title="Toggle Light/Dark Mode">☀️</button>
+
+<div class="container container-main">
+    
+    <div class="header-box">
+        <div class="logo-wrapper">
+            <div class="logo-bg-glow"></div>
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo">
+        </div>
+        <div class="header-text">
+            <h1 class="fw-bold display-4 text-white">imergpy Interface</h1>
+            <p class="text-muted fs-4">NASA Global Precipitation Data Downloader</p>
+        </div>
+    </div>
+    
+    <hr>
+
+    <form id="downloadForm">
+        
+        <h3 class="mb-4 fw-bold text-info">1. Data Settings</h3>
+        <div class="row g-4 mb-5">
+            <div class="col-md-4">
+                <label class="form-label fw-bold">Frequency</label>
+                <select class="form-select form-select-lg" id="freq">
+                    <option value="hhr">Half-Hourly</option>
+                    <option value="daily">Daily</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">
+                    Run Type
+                    <span class="info-hover-container">ℹ️
+                        <span class="tooltip-card">
+                            <strong>Run type tradeoff</strong>
+                            <ul>
+                                <li><strong>Early:</strong> latest ~today, fastest availability, satellite-only, no gauge correction.</li>
+                                <li><strong>Late:</strong> latest ~yesterday, moderate delay, better than Early, still mainly satellite-based.</li>
+                                <li><strong>Final:</strong> latest ~Feb 2026, best accuracy, gauge-adjusted, climatology/bias correction, historical delay.</li>
+                            </ul>
+                        </span>
+                    </span>
+                </label>
+                <select class="form-select form-select-lg" id="run_type">
+                    <option value="early">Early</option>
+                    <option value="late">Late</option>
+                    <option value="final">Final</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold">
+                    Interpolation
+                    <span class="info-hover-container">ℹ️
+                        <span class="tooltip-card">
+                            <strong>Accuracy and processing time</strong>
+                            <ul>
+                                <li><strong>Nearest:</strong> good, fastest download/process time, exact closest IMERG grid cell.</li>
+                                <li><strong>Linear:</strong> better, moderate processing time, smooths between nearby grid cells.</li>
+                                <li><strong>Cubic:</strong> best smoothness, slowest processing time, may create unrealistic values near sharp rainfall gradients.</li>
+                            </ul>
+                        </span>
+                    </span>
+                </label>
+                <select class="form-select form-select-lg" id="interp">
+                    <option value="nearest">Nearest</option>
+                    <option value="linear">Linear</option>
+                    <option value="cubic">Cubic</option>
+                </select>
+            </div>
+        </div>
+
+        <hr>
+
+        <h3 class="mb-4 fw-bold text-info">2. Target Location & Time</h3>
+        <p class="text-muted fs-5 mb-4">Choose whether you need IMERG data for one point, one country, or a square area.</p>
+
+        <div class="selection-mode-bar">
+            <label class="selection-mode-card active" id="mode-card-point">
+                <input type="radio" name="selection_mode" value="point" checked> Point
+            </label>
+            <label class="selection-mode-card" id="mode-card-country">
+                <input type="radio" name="selection_mode" value="country"> Country
+            </label>
+            <label class="selection-mode-card" id="mode-card-square">
+                <input type="radio" name="selection_mode" value="square"> Square Area
+            </label>
+        </div>
+
+        <div id="map"></div>
+
+        <div class="selection-panel active" id="point-panel">
+        <div class="selection-note">Point mode: click the map or type latitude/longitude. A pin will mark the selected point.</div>
+        <div class="row g-4 mb-4">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Latitude</label>
+                <input type="number" step="any" class="form-control form-control-lg" id="lat" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Longitude</label>
+                <input type="number" step="any" class="form-control form-control-lg" id="lon" required>
+            </div>
+        </div>
+        </div>
+
+        <div class="selection-panel country-readout" id="country-panel">
+            <div class="selection-note">Country mode: click a country on the map, or type a country name and choose a suggestion.</div>
+            <div class="row g-4 mb-4">
+                <div class="col-md-8">
+                    <label class="form-label fw-bold">Selected Country</label>
+                    <input type="text" class="form-control form-control-lg" id="country_name" list="country_suggestions" placeholder="Type or click a country">
+                    <datalist id="country_suggestions"></datalist>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">Country Code</label>
+                    <input type="text" class="form-control form-control-lg" id="country_code" placeholder="e.g. LK">
+                </div>
+            </div>
+        </div>
+
+        <div class="selection-panel area-readout" id="square-panel">
+            <div class="selection-note">Square mode: drag on the map to draw an area, or type the four boundary values below.</div>
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Top Lat</label>
+                    <input type="number" step="any" class="form-control form-control-lg" id="area_top">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Left Lon</label>
+                    <input type="number" step="any" class="form-control form-control-lg" id="area_left">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Bottom Lat</label>
+                    <input type="number" step="any" class="form-control form-control-lg" id="area_bottom">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Right Lon</label>
+                    <input type="number" step="any" class="form-control form-control-lg" id="area_right">
+                </div>
+            </div>
+        </div>
+        
+        <div class="row g-4 mb-5">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Start Period</label>
+                <input type="datetime-local" class="form-control form-control-lg" id="start_dt" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">End Period</label>
+                <input type="datetime-local" class="form-control form-control-lg" id="end_dt" required>
+            </div>
+        </div>
+
+        <hr>
+
+        <h3 class="mb-4 fw-bold text-info">
+            3. NASA Earthdata Credentials
+            <span class="info-hover-container">ℹ️
+                <span class="tooltip-card">
+                    <strong>NASA Earthdata account required</strong>
+                    <ul>
+                        <li>Create a free NASA Earthdata account.</li>
+                        <li>After login, authorize <strong>GES DISC</strong> in Applications &gt; Authorized Apps.</li>
+                        <li>Use those credentials only inside this local app.</li>
+                    </ul>
+                    <a class="signup-link" href="https://urs.earthdata.nasa.gov/users/new" target="_blank" rel="noopener">SIGN UP</a>
+                </span>
+            </span>
+        </h3>
+        <p class="text-muted fs-5 mb-4">You need a free NASA Earthdata account to download IMERG data.</p>
+        
+        <div class="row g-4 mb-5">
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Username</label>
+                <input type="text" class="form-control form-control-lg" id="username" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label fw-bold">Password</label>
+                <input type="password" class="form-control form-control-lg" id="password" required>
+            </div>
+        </div>
+
+        <div class="d-grid col-md-4 col-sm-8 mx-auto mt-4">
+            <button type="submit" class="btn btn-primary fw-bold py-2 fs-5 shadow">DOWNLOAD DATA</button>
+        </div>
+    </form>
+
+    <div id="loading">
+        <div class="spinner-border text-info mb-4" role="status" style="width: 6rem; height: 6rem; border-width: 0.6em;"></div>
+        <h1 class="text-info fw-bold display-2" id="loading-text">DOWNLOADING... <span id="percentText">0%</span></h1>
+        <div class="progress w-75 mx-auto mt-4 shadow-lg" style="height: 35px;">
+            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+        </div>
+        <div class="progress-status" id="progressStatus">Preparing request...</div>
+    </div>
+    
+    <div id="result-box"></div>
+</div>
+
+<!-- Floating FAQ Button -->
+<button class="btn btn-info text-white btn-floating" data-bs-toggle="modal" data-bs-target="#faqModal" title="Help & FAQ">FAQ</button>
+
+<!-- FAQ Modal -->
+<div class="modal fade" id="faqModal" tabindex="-1" aria-labelledby="faqModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark text-white border border-info shadow-lg">
+      <div class="modal-header bg-info text-white border-0">
+        <h5 class="modal-title fw-bold fs-4">Knowledge Base</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="accordion accordion-flush" id="faqAccordion">
+          
+          <div class="accordion-item bg-dark text-white border-0 shadow-sm mb-3">
+            <h2 class="accordion-header">
+              <button class="accordion-button fw-bold fs-5 bg-secondary text-white" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                IMERG Run Types
+              </button>
+            </h2>
+            <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+              <div class="accordion-body fs-6 bg-dark text-white">
+                <p>IMERG data comes in different processing speeds, affecting accuracy:</p>
+                <ul>
+                    <li><strong>Early Run:</strong> (~4hr delay) <span class="text-success fw-bold">Pro:</span> Real-time. <span class="text-danger fw-bold">Con:</span> Satellite only.</li>
+                    <li class="mt-2"><strong>Late Run:</strong> (~14hr delay) <span class="text-success fw-bold">Pro:</span> Accurate. <span class="text-danger fw-bold">Con:</span> Moderate delay.</li>
+                    <li class="mt-2"><strong>Final Run:</strong> (~3.5mo delay) <span class="text-success fw-bold">Pro:</span> Gauge calibrated. <span class="text-danger fw-bold">Con:</span> Historical only.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="accordion-item bg-dark text-white border-0 shadow-sm mb-3">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-bold fs-5 bg-secondary text-white" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                Interpolation Methods
+              </button>
+            </h2>
+            <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body fs-6 bg-dark text-white">
+                <p>How a single Lat/Lon point is estimated from a grid of satellite data:</p>
+                <ul>
+                    <li><strong>Nearest Neighbor:</strong> <span class="text-success fw-bold">Pro:</span> Raw/Exact. <span class="text-danger fw-bold">Con:</span> Grid-like.</li>
+                    <li class="mt-2"><strong>Linear:</strong> <span class="text-success fw-bold">Pro:</span> Smooth gradients. <span class="text-danger fw-bold">Con:</span> Averaged.</li>
+                    <li class="mt-2"><strong>Cubic:</strong> <span class="text-success fw-bold">Pro:</span> Visual beauty. <span class="text-danger fw-bold">Con:</span> High CPU/Negatives.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div class="accordion-item bg-dark text-white border-0 shadow-sm">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-bold fs-5 bg-secondary text-white" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                NASA Earthdata Credentials
+              </button>
+            </h2>
+            <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body fs-6 bg-dark text-white">
+                <p>You need a free NASA Earthdata account to download IMERG data.</p>
+                <ol>
+                    <li>Visit the <a href="https://urs.earthdata.nasa.gov/users/new" target="_blank" class="text-info">Earthdata Portal</a>.</li>
+                    <li>Create your free account.</li>
+                    <li><strong>IMPORTANT:</strong> After logging in, go to "Applications > Authorized Apps" and approve <strong>GES DISC</strong> to accept the data license.</li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          <div class="accordion-item bg-dark text-white border-0 shadow-sm mt-3">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed fw-bold fs-5 bg-secondary text-white" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                Legal & Data Use
+              </button>
+            </h2>
+            <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+              <div class="accordion-body fs-6 bg-dark text-white">
+                <p><strong>imergpy</strong> is an independent open-source tool. It is not developed, endorsed, or certified by NASA, GES DISC, or the GPM mission team.</p>
+                <ul>
+                    <li>Use your own NASA Earthdata account.</li>
+                    <li>Follow NASA/GES DISC data access terms.</li>
+                    <li>Cite NASA GPM IMERG data correctly in reports and publications.</li>
+                    <li>Check data quality, latency, and suitability before scientific or operational use.</li>
+                    <li>Keep usernames, passwords, and tokens private.</li>
+                </ul>
+                <p class="mb-0">This software is provided under the MIT License without warranty.</p>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer mt-auto bg-transparent"><div class="container"><h4 class="fw-bold text-white mb-2">imergpy</h4><p class="text-muted mb-2">Lakshitha S. Senavirathna | Sri Lanka</p><small class="text-muted">Independent open-source tool. Not affiliated with NASA or GES DISC. Users must follow NASA Earthdata/GES DISC data terms. | Contact: <a href="mailto:lakshithasrimal256@gmail.com" class="text-info">lakshithasrimal256@gmail.com</a> | GitHub: <a href="https://github.com/LakshithaSenavirathna" target="_blank" class="text-info">LakshithaSenavirathna</a></small></div></footer>
+<div class="build-label">UI build: 2026-05-29 region-inputs</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // --- GLOBAL REFERENCES & HELPERS ---
+    const body = document.body;
+    const loadingOverlay = document.getElementById('loading');
+    const resultBox = document.getElementById('result-box');
+    const progressBar = document.getElementById('progressBar');
+    const percentText = document.getElementById('percentText');
+    const progressStatus = document.getElementById('progressStatus');
+    const freqSelect = document.getElementById('freq');
+    const startDtInput = document.getElementById('start_dt');
+    const endDtInput = document.getElementById('end_dt');
+    const runTypeSelect = document.getElementById('run_type');
+    const latInput = document.getElementById('lat');
+    const lonInput = document.getElementById('lon');
+    const selectionModeInputs = document.querySelectorAll('input[name="selection_mode"]');
+    const modeCards = document.querySelectorAll('.selection-mode-card');
+    const pointPanel = document.getElementById('point-panel');
+    const countryPanel = document.getElementById('country-panel');
+    const squarePanel = document.getElementById('square-panel');
+    const countryNameInput = document.getElementById('country_name');
+    const countryCodeInput = document.getElementById('country_code');
+    const countrySuggestions = document.getElementById('country_suggestions');
+    const areaTopInput = document.getElementById('area_top');
+    const areaLeftInput = document.getElementById('area_left');
+    const areaBottomInput = document.getElementById('area_bottom');
+    const areaRightInput = document.getElementById('area_right');
+    let selectionMode = 'point';
+    document.getElementById('themeToggle').innerHTML = '&#9728;&#65039;';
+    const infoTips = [
+        'Early Run: near real-time, fastest, satellite-only. Late Run: delayed but improved. Final Run: gauge-adjusted and best for historical analysis.',
+        'Nearest uses the closest IMERG grid cell. Linear gives smoother interpolation between grid cells. Cubic is smoother but can be slower and may create unrealistic values near sharp gradients.',
+        'Use your NASA Earthdata account. After logging in to Earthdata, authorize GES DISC under Applications > Authorized Apps before downloading.'
+    ];
+    document.querySelectorAll('.info-hover-container').forEach((item, index) => {
+        item.setAttribute('data-tip', infoTips[index] || 'More information');
+        if (!item.querySelector('.tooltip-card')) item.innerHTML = '&#8505;&#65039;';
+    });
+    let chartInstance = null;
+    let lastDownloadedFile = null;
+    let lastPlotLabels = [];
+    let lastPlotValues = [];
+    let lastPlotUnit = '';
+
+    // Helper to format dates consistently for backend
+    const formatDateTime = (value, freq) => {
+        if (!value) return '';
+        const d = new Date(value);
+        const pad = (n) => n.toString().padStart(2, '0');
+        if (freq === 'hhr') {
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        } else if (freq === 'daily') {
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        } else if (freq === 'monthly') {
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+        }
+        return value; // Fallback
+    };
+
+    // --- INTRO ANIMATION & GLOW ---
+    window.addEventListener('load', () => { setTimeout(() => { document.getElementById('intro-screen').style.display = 'none'; }, 2500); });
+    
+    // --- SCROLLING CELESTIAL BODY ---
+    window.addEventListener('scroll', () => { body.classList.toggle('scrolled', window.scrollY > 150); });
+
+    // --- STARFIELD & ASTEROIDS ---
+    const canvas = document.getElementById('starfield'), ctx = canvas.getContext('2d');
+    let w, h, stars = [], asteroids = [];
+    let ox = 0, oy = 0, tx = 0, ty = 0; // Current and target offsets for parallax
+
+    function resizeCanvas() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+    document.addEventListener('mousemove', (e) => {
+        tx = ((e.clientX / w) - 0.5) * 800; // Map cursor X to -400 to +400 offset
+        ty = ((e.clientY / h) - 0.5) * 800; // Map cursor Y to -400 to +400 offset
+    });
+
+    class Star {
+        constructor() { this.reset(true); }
+        reset(randomLife = false) {
+            this.x = Math.random() * (w + 1000) - 500; this.y = Math.random() * (h + 1000) - 500;
+            this.z = Math.random() * 0.9 + 0.1; // Depth: 0.1 (far) to 1 (near)
+            this.size = Math.random() * 1.8 + 0.7; // Size: 0.7 to 2.5
+            this.color = Math.random() > 0.5 ? '173,216,230' : '255,255,200'; // Lighter blue/yellow
+            this.life = randomLife ? Math.random() * 12000 : 0; // Random start for life cycle
+            this.maxLife = 7000 + Math.random() * 7000; // Blinking cycle 7s to 14s
+        }
+        update(deltaT) {
+            this.life += deltaT;
+            if (this.life > this.maxLife) this.life = 0;
+        }
+        draw(oX, oY) {
+            let cycle = this.life / this.maxLife; let brightness = Math.sin(cycle * Math.PI); // 0 -> 1 -> 0
+            let dX = this.x - (oX * this.z), dY = this.y - (oY * this.z);
+            ctx.beginPath(); ctx.arc(dX, dY, this.size + brightness * 1.5, 0, Math.PI * 2); // Pulsating size
+            ctx.fillStyle = `rgba(${this.color}, ${brightness * 0.9})`; ctx.fill();
+        }
+    }
+
+    class Asteroid {
+        constructor() { this.reset(); }
+        reset() {
+            this.x = Math.random() * w * 1.2 - w * 0.1; this.y = -250; 
+            this.z = Math.random() * 1.8 + 0.2; // 3D depth for parallax and size
+            this.vx = (Math.random() - 0.5) * 2 + 1; // Slower speed, more varied
+            this.vy = Math.random() * 2 + 2; 
+            this.len = Math.random() * 120 + 80; // Longer tails
+            this.active = Math.random() > 0.96; // Less frequent spawn
+        }
+        update() { 
+            if(!this.active) { if(Math.random() > 0.99) this.reset(); return; } 
+            this.x += this.vx; this.y += this.vy; 
+            if (this.x < -600 || this.x > w + 600 || this.y > h + 600) this.active = false; 
+        }
+        draw(oX, oY) {
+            if(!this.active) return;
+            let dX = this.x - (oX * this.z), dY = this.y - (oY * this.z);
+            let tailColor = `rgba(0,255,255, ${0.4 * this.z})`; // Cyan tail
+            let headGlow = `rgba(0,255,255,1)`; // Cyan glow
+
+            ctx.beginPath(); ctx.moveTo(dX, dY); ctx.lineTo(dX - this.vx * (this.len/5), dY - this.vy * (this.len/5));
+            ctx.strokeStyle = tailColor; ctx.lineWidth = 3 * this.z; ctx.lineCap = 'round'; ctx.stroke();
+            ctx.beginPath(); ctx.arc(dX, dY, 2.5 * this.z, 0, Math.PI * 2); ctx.fillStyle = 'white'; 
+            ctx.shadowBlur = 25 * this.z; ctx.shadowColor = headGlow; ctx.fill(); ctx.shadowBlur = 0;
+        }
+    }
+
+    for (let i = 0; i < 450; i++) stars.push(new Star()); // More stars
+    for (let i = 0; i < 15; i++) asteroids.push(new Asteroid()); // More asteroids
+
+    let lastFrameTime = performance.now();
+    function animate(currentTime) {
+        let deltaT = currentTime - lastFrameTime; lastFrameTime = currentTime;
+        ctx.clearRect(0, 0, w, h);
+        ox += (tx - ox) * 0.15; oy += (ty - oy) * 0.15; // Smoother parallax transition
+        if (body.classList.contains('dark-theme')) {
+            stars.forEach(s => { s.update(deltaT); s.draw(ox, oy); });
+            asteroids.forEach(a => { a.update(); a.draw(ox, oy); });
+        }
+        requestAnimationFrame(animate);
+    }
+    animate(performance.now());
+
+    // --- MAP & THEME ---
+    const leafletAvailable = typeof L !== 'undefined';
+    const mapElement = document.getElementById('map');
+    const map = leafletAvailable ? L.map('map').setView([7.8, 80.7], 7) : null;
+    const lightTiles = leafletAvailable ? L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }) : null;
+    const darkTiles = leafletAvailable ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' }).addTo(map) : null;
+    let targetMarker = null;
+    let countryLayer = null;
+    let squareLayer = null;
+    let squareFirstCorner = null;
+    let selectedCountryGeometry = null;
+    let selectedCountryBbox = null;
+    let selectedSquareBbox = null;
+    let isDrawingSquare = false;
+    let squareDragStart = null;
+    if (!leafletAvailable) {
+        mapElement.innerHTML = '<div class="h-100 d-flex align-items-center justify-content-center text-center p-4"><div><h4 class="text-info">Map library not loaded</h4><p class="text-muted mb-0">Enter latitude and longitude manually, then download.</p></div></div>';
+    }
+    
+    document.getElementById('themeToggle').onclick = (e) => {
+        let isD = body.classList.toggle('dark-theme');
+        e.target.innerHTML = isD ? '&#9728;&#65039;' : '&#127769;';
+        if (!leafletAvailable) return;
+        if(isD) { map.removeLayer(lightTiles); darkTiles.addTo(map); }
+        else { map.removeLayer(darkTiles); lightTiles.addTo(map); }
+    };
+    
+    function updateTargetMarker(lat, lon, panToMarker = true) {
+        if (!leafletAvailable || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        const point = [lat, lon];
+        if (!targetMarker) {
+            targetMarker = L.marker(point).addTo(map);
+        } else {
+            targetMarker.setLatLng(point);
+        }
+        targetMarker.bindPopup(`Selected point<br>Lat: ${lat.toFixed(4)}<br>Lon: ${lon.toFixed(4)}`).openPopup();
+        if (panToMarker) map.setView(point, Math.max(map.getZoom(), 8));
+    }
+
+    function syncTargetMarkerFromInputs() {
+        const lat = parseFloat(latInput.value);
+        const lon = parseFloat(lonInput.value);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            updateTargetMarker(lat, lon, true);
+        }
+    }
+
+    function setSelectionMode(mode) {
+        selectionMode = mode;
+        modeCards.forEach(card => card.classList.toggle('active', card.querySelector('input').value === mode));
+        pointPanel.classList.toggle('active', mode === 'point');
+        countryPanel.classList.toggle('active', mode === 'country');
+        squarePanel.classList.toggle('active', mode === 'square');
+        latInput.disabled = mode !== 'point';
+        lonInput.disabled = mode !== 'point';
+        latInput.required = mode === 'point';
+        lonInput.required = mode === 'point';
+        squareFirstCorner = null;
+        isDrawingSquare = false;
+        squareDragStart = null;
+        clearMapSelections();
+        if (mode !== 'country') {
+            countryNameInput.value = '';
+            countryCodeInput.value = '';
+            countrySuggestions.innerHTML = '';
+        }
+        if (mode !== 'square') {
+            areaTopInput.value = '';
+            areaLeftInput.value = '';
+            areaBottomInput.value = '';
+            areaRightInput.value = '';
+        }
+        if (leafletAvailable) {
+            if (mode === 'square') map.dragging.disable();
+            else map.dragging.enable();
+        }
+        if (targetMarker && mode !== 'point') {
+            map.removeLayer(targetMarker);
+            targetMarker = null;
+        }
+    }
+
+    function clearMapSelections() {
+        if (!leafletAvailable) return;
+        if (targetMarker) {
+            map.removeLayer(targetMarker);
+            targetMarker = null;
+        }
+        if (countryLayer) {
+            map.removeLayer(countryLayer);
+            countryLayer = null;
+        }
+        if (squareLayer) {
+            map.removeLayer(squareLayer);
+            squareLayer = null;
+        }
+        selectedCountryGeometry = null;
+        selectedCountryBbox = null;
+        selectedSquareBbox = null;
+        squareFirstCorner = null;
+    }
+
+    async function selectCountryAt(lat, lon) {
+        if (!leafletAvailable) return;
+        countryNameInput.value = 'Loading country boundary...';
+        countryCodeInput.value = '';
+        try {
+            const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&polygon_geojson=1&zoom=3&addressdetails=1`;
+            const response = await fetch(url);
+            const data = await response.json();
+            applyCountrySelection(data);
+        } catch (err) {
+            countryNameInput.value = 'Country lookup failed. Check internet connection.';
+            console.error(err);
+        }
+    }
+
+    function applyCountrySelection(data) {
+        if (!leafletAvailable || !data) return;
+            const countryName = data.address && data.address.country ? data.address.country : 'Unknown country';
+            const countryCode = data.address && data.address.country_code ? data.address.country_code.toUpperCase() : '';
+            countryNameInput.value = countryName;
+            countryCodeInput.value = countryCode;
+            selectedCountryGeometry = data.geojson || null;
+            selectedCountryBbox = null;
+
+            if (countryLayer) map.removeLayer(countryLayer);
+            if (data.geojson) {
+                countryLayer = L.geoJSON(data.geojson, {
+                    style: {
+                        color: '#00f5ff',
+                        weight: 3,
+                        opacity: 1,
+                        fillColor: '#00f5ff',
+                        fillOpacity: 0.22,
+                        className: 'country-shadow'
+                    }
+                }).addTo(map);
+                const bounds = countryLayer.getBounds();
+                selectedCountryBbox = [
+                    bounds.getSouth(),
+                    bounds.getWest(),
+                    bounds.getNorth(),
+                    bounds.getEast()
+                ];
+                map.fitBounds(countryLayer.getBounds(), { padding: [20, 20] });
+            } else if (data.boundingbox && data.boundingbox.length === 4) {
+                const south = parseFloat(data.boundingbox[0]);
+                const north = parseFloat(data.boundingbox[1]);
+                const west = parseFloat(data.boundingbox[2]);
+                const east = parseFloat(data.boundingbox[3]);
+                selectedCountryBbox = [south, west, north, east];
+                countryLayer = L.rectangle([[south, west], [north, east]], {
+                    color: '#00f5ff',
+                    weight: 3,
+                    opacity: 1,
+                    fillColor: '#00f5ff',
+                    fillOpacity: 0.18
+                }).addTo(map);
+                map.fitBounds(countryLayer.getBounds(), { padding: [20, 20] });
+            }
+    }
+
+    async function searchCountryByName(query) {
+        if (!leafletAvailable || !query || query.trim().length < 2) return;
+        try {
+            const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&country=${encodeURIComponent(query.trim())}&polygon_geojson=1&addressdetails=1&limit=5`;
+            const response = await fetch(url);
+            const data = await response.json();
+            countrySuggestions.innerHTML = '';
+            data.forEach(item => {
+                const name = item.address && item.address.country ? item.address.country : item.display_name;
+                const option = document.createElement('option');
+                option.value = name;
+                option.label = item.display_name;
+                countrySuggestions.appendChild(option);
+            });
+            const exact = data.find(item => {
+                const name = item.address && item.address.country ? item.address.country : item.display_name;
+                return name && name.toLowerCase() === query.trim().toLowerCase();
+            });
+            if (exact) applyCountrySelection(exact);
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function drawSquareBounds(startLatLng, endLatLng, fit = false) {
+        if (!leafletAvailable) return;
+        const north = Math.max(startLatLng.lat, endLatLng.lat);
+        const south = Math.min(startLatLng.lat, endLatLng.lat);
+        const west = Math.min(startLatLng.lng, endLatLng.lng);
+        const east = Math.max(startLatLng.lng, endLatLng.lng);
+        areaTopInput.value = north.toFixed(4);
+        areaLeftInput.value = west.toFixed(4);
+        areaBottomInput.value = south.toFixed(4);
+        areaRightInput.value = east.toFixed(4);
+        selectedSquareBbox = [south, west, north, east];
+
+        const bounds = [[south, west], [north, east]];
+        if (squareLayer) map.removeLayer(squareLayer);
+        squareLayer = L.rectangle(bounds, {
+            color: '#39ff14',
+            weight: 4,
+            opacity: 1,
+            fillColor: '#39ff14',
+            fillOpacity: 0.2,
+            dashArray: '8,6'
+        }).addTo(map);
+        squareLayer.bindPopup(`Square area<br>Top: ${north.toFixed(4)}<br>Left: ${west.toFixed(4)}<br>Bottom: ${south.toFixed(4)}<br>Right: ${east.toFixed(4)}`).openPopup();
+        if (fit) map.fitBounds(squareLayer.getBounds(), { padding: [20, 20] });
+    }
+
+    function syncSquareFromInputs() {
+        if (!leafletAvailable) return;
+        const north = parseFloat(areaTopInput.value);
+        const west = parseFloat(areaLeftInput.value);
+        const south = parseFloat(areaBottomInput.value);
+        const east = parseFloat(areaRightInput.value);
+        if (![north, west, south, east].every(Number.isFinite)) return;
+        if (north <= south || east <= west) return;
+        drawSquareBounds(L.latLng(north, west), L.latLng(south, east), true);
+    }
+
+    function mouseEventToLatLng(ev) {
+        const point = L.DomEvent.getMousePosition(ev, map.getContainer());
+        return map.containerPointToLatLng(point);
+    }
+
+    if (leafletAvailable) {
+        map.on('click', e => {
+            if (selectionMode === 'point') {
+                latInput.value = e.latlng.lat.toFixed(4);
+                lonInput.value = e.latlng.lng.toFixed(4);
+                updateTargetMarker(e.latlng.lat, e.latlng.lng, false);
+            } else if (selectionMode === 'country') {
+                selectCountryAt(e.latlng.lat, e.latlng.lng);
+            }
+        });
+        const mapContainer = map.getContainer();
+        mapContainer.addEventListener('contextmenu', ev => {
+            if (selectionMode === 'square') ev.preventDefault();
+        });
+        mapContainer.addEventListener('mousedown', ev => {
+            if (selectionMode !== 'square') return;
+            if (ev.button !== 0 && ev.button !== 2) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            isDrawingSquare = true;
+            squareDragStart = mouseEventToLatLng(ev);
+            selectedSquareBbox = null;
+            if (squareLayer) {
+                map.removeLayer(squareLayer);
+                squareLayer = null;
+            }
+        });
+        document.addEventListener('mousemove', ev => {
+            if (selectionMode === 'square' && isDrawingSquare && squareDragStart) {
+                ev.preventDefault();
+                drawSquareBounds(squareDragStart, mouseEventToLatLng(ev), false);
+            }
+        });
+        document.addEventListener('mouseup', ev => {
+            if (selectionMode === 'square' && isDrawingSquare && squareDragStart) {
+                ev.preventDefault();
+                drawSquareBounds(squareDragStart, mouseEventToLatLng(ev), true);
+                isDrawingSquare = false;
+                squareDragStart = null;
+            }
+        });
+        latInput.addEventListener('change', syncTargetMarkerFromInputs);
+        lonInput.addEventListener('change', syncTargetMarkerFromInputs);
+        latInput.addEventListener('blur', syncTargetMarkerFromInputs);
+        lonInput.addEventListener('blur', syncTargetMarkerFromInputs);
+        let countrySearchTimer = null;
+        countryNameInput.addEventListener('input', () => {
+            clearTimeout(countrySearchTimer);
+            countrySearchTimer = setTimeout(() => searchCountryByName(countryNameInput.value), 450);
+        });
+        countryNameInput.addEventListener('change', () => searchCountryByName(countryNameInput.value));
+        countryCodeInput.addEventListener('change', () => searchCountryByName(countryCodeInput.value));
+        [areaTopInput, areaLeftInput, areaBottomInput, areaRightInput].forEach(input => {
+            input.addEventListener('change', syncSquareFromInputs);
+            input.addEventListener('blur', syncSquareFromInputs);
+        });
+    }
+
+    selectionModeInputs.forEach(input => {
+        input.addEventListener('change', () => setSelectionMode(input.value));
+    });
+
+    async function openDownloadedFile() {
+        if (!lastDownloadedFile) return;
+        await fetch('/api/open', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: lastDownloadedFile })
+        });
+    }
+
+    function drawFallbackChart(canvas, labels, values, unit) {
+        const ctxChart = canvas.getContext('2d');
+        const width = canvas.clientWidth || 900;
+        const height = canvas.clientHeight || 420;
+        canvas.width = width;
+        canvas.height = height;
+        ctxChart.clearRect(0, 0, width, height);
+        ctxChart.fillStyle = '#071014';
+        ctxChart.fillRect(0, 0, width, height);
+
+        const padding = 58;
+        const maxValue = Math.max(...values, 1);
+        const plotWidth = width - padding * 2;
+        const plotHeight = height - padding * 2;
+
+        ctxChart.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctxChart.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = padding + (plotHeight / 4) * i;
+            ctxChart.beginPath();
+            ctxChart.moveTo(padding, y);
+            ctxChart.lineTo(width - padding, y);
+            ctxChart.stroke();
+        }
+
+        ctxChart.strokeStyle = '#00ff88';
+        ctxChart.lineWidth = 3;
+        ctxChart.beginPath();
+        values.forEach((value, index) => {
+            const x = padding + (values.length === 1 ? plotWidth / 2 : (plotWidth * index) / (values.length - 1));
+            const y = height - padding - (value / maxValue) * plotHeight;
+            if (index === 0) ctxChart.moveTo(x, y);
+            else ctxChart.lineTo(x, y);
+        });
+        ctxChart.stroke();
+
+        ctxChart.fillStyle = '#dff';
+        ctxChart.font = '16px sans-serif';
+        ctxChart.fillText(`Precipitation (${unit})`, padding, 30);
+        ctxChart.fillText(labels[0] || '', padding, height - 18);
+        ctxChart.textAlign = 'right';
+        ctxChart.fillText(labels[labels.length - 1] || '', width - padding, height - 18);
+        ctxChart.textAlign = 'left';
+    }
+
+    function renderRainfallChart(labels, values, unit) {
+        const canvas = document.getElementById('rainfallChart');
+        const wrapper = document.getElementById('chart-wrapper');
+        if (wrapper) wrapper.style.display = 'block';
+        const ctxChart = canvas.getContext('2d');
+        if (chartInstance) chartInstance.destroy();
+
+        if (typeof Chart === 'undefined') {
+            drawFallbackChart(canvas, labels, values, unit);
+            return;
+        }
+
+        chartInstance = new Chart(ctxChart, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: `Precipitation (${unit})`,
+                    data: values,
+                    borderColor: '#0f0',
+                    backgroundColor: 'rgba(0,255,0,0.1)',
+                    borderWidth: 4,
+                    pointRadius: 6,
+                    pointBackgroundColor: '#0f0',
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#0f0', font: { weight: 'bold', size: 14 } },
+                        title: { display: true, text: `Precipitation (${unit})`, color: '#0f0', font: { size: 18, weight: 'bold' } }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#0dcaf0', font: { size: 12 } },
+                        title: { display: true, text: 'Time Period', color: '#0dcaf0', font: { size: 18, weight: 'bold' } }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#fff', font: { size: 16 } } },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return labels[context[0].dataIndex];
+                            },
+                            label: function(context) { return `Precipitation: ${context.formattedValue} ${unit}`; }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- FORM & CHART LOGIC ---
+    freqSelect.addEventListener('change', function() {
+        startDtInput.value = ""; endDtInput.value = "";
+        if (this.value === 'hhr') { startDtInput.type = 'datetime-local'; endDtInput.type = 'datetime-local'; runTypeSelect.disabled = false; }
+        else if (this.value === 'daily') { startDtInput.type = 'date'; endDtInput.type = 'date'; runTypeSelect.disabled = false; }
+        else { startDtInput.type = 'month'; endDtInput.type = 'month'; runTypeSelect.value = 'final'; runTypeSelect.disabled = true; }
+    });
+
+    document.getElementById('downloadForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const rId = Math.random().toString(36).substring(7);
+        const f = freqSelect.value;
+        let requestLat = parseFloat(latInput.value);
+        let requestLon = parseFloat(lonInput.value);
+        let requestBbox = null;
+        let requestGeometry = null;
+        let requestRegionName = 'point';
+
+        if (selectionMode === 'country') {
+            if (!selectedCountryBbox) {
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `<div class="alert alert-warning p-4 rounded-3 shadow result-card"><h3 class="fw-bold">Select a country first</h3><p>Click a country on the map before downloading a country average.</p></div>`;
+                return;
+            }
+            requestBbox = selectedCountryBbox;
+            requestGeometry = selectedCountryGeometry;
+            requestRegionName = countryNameInput.value || 'country';
+            requestLat = (requestBbox[0] + requestBbox[2]) / 2;
+            requestLon = (requestBbox[1] + requestBbox[3]) / 2;
+        } else if (selectionMode === 'square') {
+            if (!selectedSquareBbox) {
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `<div class="alert alert-warning p-4 rounded-3 shadow result-card"><h3 class="fw-bold">Draw a square area first</h3><p>In Square Area mode, drag on the map to the opposite corner, then release. Right-click drag and left-drag are both supported.</p></div>`;
+                return;
+            }
+            requestBbox = selectedSquareBbox;
+            requestRegionName = 'square_area';
+            requestLat = (requestBbox[0] + requestBbox[2]) / 2;
+            requestLon = (requestBbox[1] + requestBbox[3]) / 2;
+        }
+
+        if (!Number.isFinite(requestLat) || !Number.isFinite(requestLon)) {
+            resultBox.style.display = 'block';
+            resultBox.innerHTML = `<div class="alert alert-warning p-4 rounded-3 shadow result-card"><h3 class="fw-bold">Select a valid location</h3><p>Use Point, Country, or Square Area selection before downloading.</p></div>`;
+            return;
+        }
+
+        const payload = {
+            request_id: rId,
+            selection_mode: selectionMode,
+            bbox: requestBbox,
+            geometry: requestGeometry,
+            region_name: requestRegionName,
+            lat: requestLat,
+            lon: requestLon,
+            start_datetime: formatDateTime(startDtInput.value, f), 
+            end_datetime: formatDateTime(endDtInput.value, f),
+            username: document.getElementById('username').value, 
+            password: document.getElementById('password').value,
+            run_type: runTypeSelect.value, freq: f, 
+            interp_method: document.getElementById('interp').value
+        };
+        
+        loadingOverlay.style.display='flex';
+        resultBox.style.display='none';
+        progressBar.style.width = '0%'; progressBar.innerHTML = '0%';
+        percentText.innerHTML = '0%';
+        progressStatus.innerHTML = 'Preparing request...';
+
+        const ev = new EventSource(`/api/progress/${rId}`);
+        ev.onmessage = m => { 
+            const percent = Math.max(0, Math.min(100, parseInt(m.data, 10) || 0));
+            progressBar.style.width = percent + '%'; 
+            progressBar.innerHTML = percent + '%'; 
+            progressBar.setAttribute('aria-valuenow', percent);
+            percentText.innerHTML = percent + '%';
+            progressStatus.innerHTML = percent < 100 ? 'Downloading and processing IMERG files...' : 'Finalizing Excel file and chart...';
+            if(percent >= 100) ev.close(); 
+        };
+
+        try {
+            const res = await fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const dat = await res.json(); ev.close();
+            loadingOverlay.style.display='none';
+            resultBox.style.display='block';
+
+            if (res.ok) {
+                lastDownloadedFile = dat.file;
+                const precipKey = dat.data.length > 0 ? Object.keys(dat.data[0]).find(k => k.startsWith('Precipitation_')) : 'Precipitation_Value';
+                const unit = precipKey.replace('Precipitation_', '').replace(/_/g, ' ');
+                const labels = dat.data.map(r => `${r.Start_Time.replace('T',' ')} to ${r.End_Time.replace('T',' ')}`);
+                lastPlotLabels = labels;
+                lastPlotValues = dat.data.map(r => r[precipKey]);
+                lastPlotUnit = unit;
+                
+                resultBox.innerHTML = `
+                    <div class="alert alert-success border-0 p-3 rounded-3 shadow result-card">
+                        <h1 class="fw-bold mb-2"><span class="success-glow">DATA DOWNLOADED</span></h1>
+                        <p class="fs-4"><strong>File:</strong> <code>${dat.file}</code></p>
+                        <p class="fs-5 mb-4">Excel includes separate <strong>Start Time</strong> and <strong>End Time</strong> columns.</p>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <button class="btn btn-success w-100 fw-bold py-2 fs-5" onclick="openDownloadedFile()">OPEN IN EXCEL</button>
+                            </div>
+                            <div class="col-md-6">
+                                <button class="btn btn-info w-100 fw-bold py-2 fs-5 text-white" onclick="renderRainfallChart(lastPlotLabels, lastPlotValues, lastPlotUnit)">PLOT TIME SERIES</button>
+                            </div>
+                        </div>
+                        <h3 class="fw-bold mb-3">Downloaded Rainfall Time Series</h3>
+                        <div id="chart-wrapper" style="display:none;"><canvas id="rainfallChart"></canvas></div>
+                    </div>`;
+            } else { resultBox.innerHTML = `<div class="alert alert-danger p-5 rounded-4 shadow"><h3>Download Failed:</h3><p>${dat.message}</p></div>`; }
+        } catch (err) { console.error("Error during download or chart render:", err); if(ev) ev.close(); loadingOverlay.style.display='none'; resultBox.innerHTML = `<div class="alert alert-danger p-5 rounded-4 shadow"><h3>Network Error:</h3><p>Could not connect to server or process request. Check terminal logs. Error: ${err.message}</p></div>`; resultBox.style.display='block'; }
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use imergpy, please cite the software and the original NASA GPM IMERG data product."
+title: "imergpy"
+version: "1.1.0"
+authors:
+  - family-names: "Senavirathna"
+    given-names: "Lakshitha S."
+license: MIT
+repository-code: "https://github.com/LakshithaSenavirathna/imergpy"
+keywords:
+  - IMERG
+  - GPM
+  - NASA
+  - precipitation
+  - rainfall

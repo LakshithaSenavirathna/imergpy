@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "imergpy"
+version = "1.1.0"
+description = "Download, extract, average, plot, and analyze NASA GPM IMERG precipitation data from Python or a local web UI."
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+  { name = "Lakshitha S. Senavirathna", email = "lakshithasrimal256@gmail.com" }
+]
+urls = { Repository = "https://github.com/LakshithaSenavirathna/imergpy" }
+license = "MIT"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+    "Topic :: Scientific/Engineering :: GIS"
+]
+keywords = ["IMERG", "GPM", "NASA", "precipitation", "rainfall", "Earthdata", "GES DISC"]
+dependencies = [
+    "requests",
+    "xarray",
+    "netCDF4",
+    "pandas",
+    "openpyxl",
+    "matplotlib",
+    "flask",
+    "python-dateutil"
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "pytest",
+    "ruff",
+    "twine"
+]
+
+[project.scripts]
+imergpy = "imergpy.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["imergpy", "imergpy.*"]
+
+[tool.setuptools.package-data]
+imergpy = ["templates/*.html", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
