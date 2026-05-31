@@ -2,20 +2,36 @@
 
 `imergpy` is a Python package and local web interface for downloading NASA GPM IMERG precipitation data through NASA Earthdata/GES DISC. It can extract point rainfall time series and compute grid-cell average rainfall for selected countries or square areas.
 
+## Download NASA IMERG Data With 2 Lines
+
+After installation, a point rainfall download can be as simple as:
+
+```python
+import imergpy
+excel_path, records = imergpy.get_precipitation(6.9271, 79.8612, "2025-11-27 00:00", "2025-11-27 23:30", "EARTHDATA_USERNAME", "EARTHDATA_PASSWORD", run_type="late", freq="hhr")
+```
+
+Replace `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` with your NASA Earthdata login. The result is saved as an Excel file.
+
 ## Quick Start
 
-Install and open:
+Install:
 
 ```bash
-pip install imergpy
-imergpy
+pip install --upgrade imergpy==1.1.6
+```
+
+Open the web app:
+
+```bash
+python -m imergpy.cli
 ```
 
 Your browser should open automatically. Enter your NASA Earthdata username/password in the local page and choose a point, country, or square area.
 
 ## Features
 
-- Local web UI launched with the `imergpy` command
+- Local web UI launched with `python -m imergpy.cli`
 - Python API for scripted workflows
 - Point, country, and square-area selection in the web map
 - Grid-cell average precipitation for country and square-area selections
@@ -25,12 +41,6 @@ Your browser should open automatically. Enter your NASA Earthdata username/passw
 - Basic rainfall plotting and statistics utilities
 
 ## Web UI
-
-```bash
-imergpy
-```
-
-If the command is not available on Windows:
 
 ```bash
 python -m imergpy.cli
@@ -46,18 +56,17 @@ python -m imergpy.cli
 ## Python API Example
 
 ```python
-import os
 import imergpy
 
 excel_path, records = imergpy.get_precipitation(
     lat=6.9271,
     lon=79.8612,
-    start_datetime="2025-01",
-    end_datetime="2025-01",
-    username=os.environ["EARTHDATA_USERNAME"],
-    password=os.environ["EARTHDATA_PASSWORD"],
-    run_type="final",
-    freq="monthly",
+    start_datetime="2025-11-27 00:00",
+    end_datetime="2025-11-27 23:30",
+    username="EARTHDATA_USERNAME",
+    password="EARTHDATA_PASSWORD",
+    run_type="late",
+    freq="hhr",
     interp_method="nearest",
 )
 
@@ -74,12 +83,7 @@ Accepted date formats:
 
 You need a free NASA Earthdata account. After creating the account, authorize GES DISC under Earthdata authorized applications.
 
-Do not write credentials into scripts. Use environment variables:
-
-```powershell
-$env:EARTHDATA_USERNAME = "your_username"
-$env:EARTHDATA_PASSWORD = "your_password"
-```
+For the easiest first test, replace `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` directly in the examples above. For shared scripts, keep credentials private and avoid uploading passwords to GitHub.
 
 ## Legal And Data Use Notice
 

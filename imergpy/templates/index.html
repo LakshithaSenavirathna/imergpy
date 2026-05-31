@@ -670,6 +670,16 @@
         return value; // Fallback
     };
 
+    function normalizeLon(lon) {
+        const value = Number(lon);
+        if (!Number.isFinite(value)) return value;
+        return ((((value + 180) % 360) + 360) % 360) - 180;
+    }
+
+    function normalizedLatLng(latlng) {
+        return L.latLng(latlng.lat, normalizeLon(latlng.lng));
+    }
+
     // --- INTRO ANIMATION & GLOW ---
     window.addEventListener('load', () => { setTimeout(() => { document.getElementById('intro-screen').style.display = 'none'; }, 2500); });
     
@@ -758,9 +768,13 @@
     // --- MAP & THEME ---
     const leafletAvailable = typeof L !== 'undefined';
     const mapElement = document.getElementById('map');
-    const map = leafletAvailable ? L.map('map').setView([7.8, 80.7], 7) : null;
-    const lightTiles = leafletAvailable ? L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM' }) : null;
-    const darkTiles = leafletAvailable ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO' }).addTo(map) : null;
+    const map = leafletAvailable ? L.map('map', {
+        maxBounds: [[-90, -180], [90, 180]],
+        maxBoundsViscosity: 1.0,
+        worldCopyJump: false
+    }).setView([7.8, 80.7], 7) : null;
+    const lightTiles = leafletAvailable ? L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OSM', noWrap: true }) : null;
+    const darkTiles = leafletAvailable ? L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', noWrap: true }).addTo(map) : null;
     let targetMarker = null;
     let countryLayer = null;
     let squareLayer = null;
@@ -784,6 +798,7 @@
     
     function updateTargetMarker(lat, lon, panToMarker = true) {
         if (!leafletAvailable || !Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        lon = normalizeLon(lon);
         const point = [lat, lon];
         if (!targetMarker) {
             targetMarker = L.marker(point).addTo(map);
@@ -796,8 +811,9 @@
 
     function syncTargetMarkerFromInputs() {
         const lat = parseFloat(latInput.value);
-        const lon = parseFloat(lonInput.value);
+        const lon = normalizeLon(parseFloat(lonInput.value));
         if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            lonInput.value = lon.toFixed(4);
             updateTargetMarker(lat, lon, true);
         }
     }
@@ -859,6 +875,7 @@
 
     async function selectCountryAt(lat, lon) {
         if (!leafletAvailable) return;
+        lon = normalizeLon(lon);
         countryNameInput.value = 'Loading country boundary...';
         countryCodeInput.value = '';
         try {
@@ -896,16 +913,16 @@
                 const bounds = countryLayer.getBounds();
                 selectedCountryBbox = [
                     bounds.getSouth(),
-                    bounds.getWest(),
+                    normalizeLon(bounds.getWest()),
                     bounds.getNorth(),
-                    bounds.getEast()
+                    normalizeLon(bounds.getEast())
                 ];
                 map.fitBounds(countryLayer.getBounds(), { padding: [20, 20] });
             } else if (data.boundingbox && data.boundingbox.length === 4) {
                 const south = parseFloat(data.boundingbox[0]);
                 const north = parseFloat(data.boundingbox[1]);
-                const west = parseFloat(data.boundingbox[2]);
-                const east = parseFloat(data.boundingbox[3]);
+                const west = normalizeLon(parseFloat(data.boundingbox[2]));
+                const east = normalizeLon(parseFloat(data.boundingbox[3]));
                 selectedCountryBbox = [south, west, north, east];
                 countryLayer = L.rectangle([[south, west], [north, east]], {
                     color: '#00f5ff',
@@ -946,8 +963,10 @@
         if (!leafletAvailable) return;
         const north = Math.max(startLatLng.lat, endLatLng.lat);
         const south = Math.min(startLatLng.lat, endLatLng.lat);
-        const west = Math.min(startLatLng.lng, endLatLng.lng);
-        const east = Math.max(startLatLng.lng, endLatLng.lng);
+        const startLon = normalizeLon(startLatLng.lng);
+        const endLon = normalizeLon(endLatLng.lng);
+        const west = Math.min(startLon, endLon);
+        const east = Math.max(startLon, endLon);
         areaTopInput.value = north.toFixed(4);
         areaLeftInput.value = west.toFixed(4);
         areaBottomInput.value = south.toFixed(4);
@@ -971,9 +990,9 @@
     function syncSquareFromInputs() {
         if (!leafletAvailable) return;
         const north = parseFloat(areaTopInput.value);
-        const west = parseFloat(areaLeftInput.value);
+        const west = normalizeLon(parseFloat(areaLeftInput.value));
         const south = parseFloat(areaBottomInput.value);
-        const east = parseFloat(areaRightInput.value);
+        const east = normalizeLon(parseFloat(areaRightInput.value));
         if (![north, west, south, east].every(Number.isFinite)) return;
         if (north <= south || east <= west) return;
         drawSquareBounds(L.latLng(north, west), L.latLng(south, east), true);
@@ -981,17 +1000,18 @@
 
     function mouseEventToLatLng(ev) {
         const point = L.DomEvent.getMousePosition(ev, map.getContainer());
-        return map.containerPointToLatLng(point);
+        return normalizedLatLng(map.containerPointToLatLng(point));
     }
 
     if (leafletAvailable) {
         map.on('click', e => {
+            const clicked = normalizedLatLng(e.latlng);
             if (selectionMode === 'point') {
-                latInput.value = e.latlng.lat.toFixed(4);
-                lonInput.value = e.latlng.lng.toFixed(4);
-                updateTargetMarker(e.latlng.lat, e.latlng.lng, false);
+                latInput.value = clicked.lat.toFixed(4);
+                lonInput.value = clicked.lng.toFixed(4);
+                updateTargetMarker(clicked.lat, clicked.lng, false);
             } else if (selectionMode === 'country') {
-                selectCountryAt(e.latlng.lat, e.latlng.lng);
+                selectCountryAt(clicked.lat, clicked.lng);
             }
         });
         const mapContainer = map.getContainer();
@@ -1171,7 +1191,7 @@
         const rId = Math.random().toString(36).substring(7);
         const f = freqSelect.value;
         let requestLat = parseFloat(latInput.value);
-        let requestLon = parseFloat(lonInput.value);
+        let requestLon = normalizeLon(parseFloat(lonInput.value));
         let requestBbox = null;
         let requestGeometry = null;
         let requestRegionName = 'point';
@@ -1186,7 +1206,7 @@
             requestGeometry = selectedCountryGeometry;
             requestRegionName = countryNameInput.value || 'country';
             requestLat = (requestBbox[0] + requestBbox[2]) / 2;
-            requestLon = (requestBbox[1] + requestBbox[3]) / 2;
+            requestLon = normalizeLon((requestBbox[1] + requestBbox[3]) / 2);
         } else if (selectionMode === 'square') {
             if (!selectedSquareBbox) {
                 resultBox.style.display = 'block';
@@ -1196,7 +1216,7 @@
             requestBbox = selectedSquareBbox;
             requestRegionName = 'square_area';
             requestLat = (requestBbox[0] + requestBbox[2]) / 2;
-            requestLon = (requestBbox[1] + requestBbox[3]) / 2;
+            requestLon = normalizeLon((requestBbox[1] + requestBbox[3]) / 2);
         }
 
         if (!Number.isFinite(requestLat) || !Number.isFinite(requestLon)) {
@@ -1215,7 +1235,7 @@
             lon: requestLon,
             start_datetime: formatDateTime(startDtInput.value, f), 
             end_datetime: formatDateTime(endDtInput.value, f),
-            username: document.getElementById('username').value, 
+            username: document.getElementById('username').value.trim(), 
             password: document.getElementById('password').value,
             run_type: runTypeSelect.value, freq: f, 
             interp_method: document.getElementById('interp').value

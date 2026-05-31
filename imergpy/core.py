@@ -3,7 +3,7 @@ import tempfile
 import pandas as pd
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from .downloader import DownloadError, EarthdataDownloader
+from .downloader import DownloadAuthError, DownloadError, EarthdataDownloader
 from .processor import extract_area_average, extract_precipitation
 
 
@@ -142,6 +142,8 @@ def get_precipitation(lat, lon, start_datetime, end_datetime, username, password
             data_dict["IMERG_Version"] = version_used
             data_dict["Run_Type"] = run_type
             results.append(data_dict)
+        except DownloadAuthError:
+            raise
         except DownloadError as e:
             failures.append({"datetime": current_dt.isoformat(), "error": str(e)})
             print(f"  -> Warning: {e}")
