@@ -30,6 +30,19 @@ def test_resample_data_uses_start_time_column():
     assert result["Total_Precip_mm"].iloc[0] == 5.0
 
 
+def test_resample_data_accepts_excel_start_time_column():
+    df = pd.DataFrame(
+        {
+            "Start Time": ["2025-01-01 00:00", "2025-01-01 00:30"],
+            "Precipitation_mm_per_half_hour": [2.0, 3.0],
+        }
+    )
+
+    result = resample_data(df, freq="D")
+
+    assert result["Total_Precip_mm"].iloc[0] == 5.0
+
+
 def test_calculate_statistics_with_new_schema():
     df = pd.DataFrame(
         {

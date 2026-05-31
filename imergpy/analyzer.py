@@ -18,7 +18,7 @@ def _find_column(df, candidates, label):
 
 
 def _time_column(df):
-    return _find_column(df, ["Start_Time", "Time"], "time column")
+    return _find_column(df, ["Start_Time", "Start Time", "Time"], "time column")
 
 
 def _precip_column(df):

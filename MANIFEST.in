@@ -3,6 +3,7 @@ include imergpy/static/*
 include LICENSE
 include README.md
 recursive-include examples *.py
+recursive-include examples *.txt
 recursive-include tests *.py
 global-exclude __pycache__/*
 global-exclude *.py[cod]

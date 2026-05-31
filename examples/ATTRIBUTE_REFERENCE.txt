@@ -1,0 +1,180 @@
+IMERGPY ATTRIBUTE REFERENCE
+==========================
+
+Main function
+-------------
+imergpy.get_precipitation(...)
+
+Required inputs
+---------------
+lat
+  Meaning: Latitude of the point or center of the selected area.
+  Type: number
+  Limit: -90 to +90
+  Example: 6.9271
+
+lon
+  Meaning: Longitude of the point or center of the selected area.
+  Type: number
+  Limit: -180 to +180
+  Example: 79.8612
+
+start_datetime
+  Meaning: Start date/time for the download.
+  Type: text
+  Formats:
+    YYYY-MM
+    YYYY-MM-DD
+    YYYY-MM-DD HH:MM
+  Examples:
+    2025-01
+    2025-11-27
+    2025-11-27 00:00
+
+end_datetime
+  Meaning: End date/time for the download.
+  Type: text
+  Formats:
+    YYYY-MM
+    YYYY-MM-DD
+    YYYY-MM-DD HH:MM
+  Example: 2025-11-27 23:30
+
+username
+  Meaning: NASA Earthdata username.
+  Type: text
+  Example: "EARTHDATA_USERNAME"
+
+password
+  Meaning: NASA Earthdata password.
+  Type: text
+  Example: "EARTHDATA_PASSWORD"
+
+Optional inputs
+---------------
+run_type
+  Meaning: IMERG processing run.
+  Type: text
+  Values:
+    early  - fastest, near real-time, satellite-only.
+    late   - delayed, improved near real-time product.
+    final  - best historical product, gauge-adjusted.
+  Default: early
+  Note: monthly frequency supports final only.
+
+freq
+  Meaning: Time frequency of downloaded rainfall.
+  Type: text
+  Values:
+    hhr     - half-hour rainfall time series.
+    daily   - daily rainfall time series.
+    monthly - monthly rainfall time series.
+  Default: hhr
+
+interp_method
+  Meaning: Method used for point extraction.
+  Type: text
+  Values:
+    nearest - nearest IMERG grid cell.
+    linear  - linear interpolation.
+    cubic   - cubic interpolation.
+  Default: nearest
+  Note: country and square-area averages use grid-cell averages, not interpolation.
+
+selection_mode
+  Meaning: Type of data selection.
+  Type: text
+  Values:
+    point   - one latitude/longitude point.
+    country - average rainfall for selected country/region polygon.
+    square  - average rainfall for selected square/rectangle area.
+  Default: point
+
+bbox
+  Meaning: Bounding box for country or square-area download.
+  Type: list of four numbers
+  Order: [min_lat, min_lon, max_lat, max_lon]
+  Example: [6.8, 79.7, 7.2, 80.1]
+  Required for: country, square
+
+geometry
+  Meaning: GeoJSON polygon used to mask a country or region.
+  Type: GeoJSON Polygon or MultiPolygon dictionary
+  Required for: accurate country polygon average
+  Note: square mode does not need geometry.
+
+region_name
+  Meaning: Name used in the Excel file name and output table.
+  Type: text
+  Example: "Japan"
+
+out_dir
+  Meaning: Folder where the Excel file is saved.
+  Type: text path
+  Default: current folder
+
+progress_callback
+  Meaning: Optional function for reporting download progress.
+  Type: Python function
+  Default: None
+
+Output
+------
+excel_path
+  Meaning: Path to the saved Excel file.
+
+records
+  Meaning: Downloaded rainfall records as Python dictionaries.
+
+Excel columns
+-------------
+Start Time
+  Start time of the rainfall interval.
+
+End Time
+  End time of the rainfall interval.
+
+Requested_Lat
+  Latitude requested by user.
+
+Requested_Lon
+  Longitude requested by user.
+
+Actual_Lat
+  Actual IMERG grid latitude used for point nearest-cell extraction.
+
+Actual_Lon
+  Actual IMERG grid longitude used for point nearest-cell extraction.
+
+Precipitation_mm_per_half_hour
+  Rainfall amount for each 30-minute interval.
+
+Precipitation_mm_per_day
+  Rainfall amount for each day.
+
+Precipitation_mm_per_month
+  Rainfall amount for each month.
+
+Grid_Cells_Averaged
+  Number of IMERG grid cells used for country or square-area average.
+
+Area average calculation
+------------------------
+Point mode:
+  Uses nearest, linear, or cubic extraction at one coordinate.
+
+Country mode:
+  Uses grid cells whose center points fall inside the country polygon.
+  Then calculates the average rainfall of those cells.
+
+Square mode:
+  Uses all valid IMERG grid cells inside the selected box.
+  Then calculates the average rainfall of those cells.
+
+Important notes
+---------------
+IMERG data availability depends on NASA product latency.
+Final data is best for historical analysis but is delayed.
+Late data is useful for recent dates.
+Early data is fastest but less corrected.
+Users must have a NASA Earthdata account and authorize GES DISC.

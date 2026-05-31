@@ -92,6 +92,7 @@ print(excel_path)
 - `examples/point_download.py`
 - `examples/country_japan_average.py`
 - `examples/square_area_average.py`
+- `examples/ATTRIBUTE_REFERENCE.txt`
 
 Accepted date formats:
 
