@@ -2,9 +2,24 @@
 
 `imergpy` is a Python package and local web interface for downloading NASA GPM IMERG precipitation data through NASA Earthdata/GES DISC. It can extract point rainfall time series and compute grid-cell average rainfall for selected countries or square areas.
 
-## Download NASA IMERG Data With 2 Lines
+<div style="border: 2px solid #39ff14; background: #071b0b; color: #eaffea; padding: 16px; border-radius: 10px; box-shadow: 0 0 22px rgba(57,255,20,0.45);">
 
-After installation, a point rainfall download can be as simple as:
+<h2 style="margin-top: 0;">Download NASA Rainfall Data With 2 Lines</h2>
+
+<ul>
+  <li>Download NASA IMERG satellite rainfall as a time series.</li>
+  <li>Excel file is saved automatically.</li>
+  <li>Use Point, Country Average, or Square Region Average.</li>
+  <li>Available from 1998-01-01 to today, depending on NASA product availability.</li>
+  <li>Supports half-hourly, daily, and monthly data.</li>
+  <li>No Linux or advanced technical knowledge needed.</li>
+</ul>
+
+</div>
+
+## Two-Line Python Download
+
+After installation, download point rainfall with:
 
 ```python
 import imergpy
@@ -13,12 +28,12 @@ excel_path, records = imergpy.get_precipitation(6.9271, 79.8612, "2025-11-27 00:
 
 Replace `EARTHDATA_USERNAME` and `EARTHDATA_PASSWORD` with your NASA Earthdata login. The result is saved as an Excel file.
 
-## Quick Start
+## Quick Start(MacOS/Windows/Linux)
 
 Install:
 
 ```bash
-pip install --upgrade imergpy==1.1.6
+pip install imergpy
 ```
 
 Open the web app:
@@ -28,6 +43,12 @@ python -m imergpy.cli
 ```
 
 Your browser should open automatically. Enter your NASA Earthdata username/password in the local page and choose a point, country, or square area.
+
+## Two Ways To Use
+
+- Method 1: Use Python code.
+- Method 2: Use the local web interface.
+- Both methods save Excel output automatically.
 
 ## Features
 
@@ -43,13 +64,6 @@ Your browser should open automatically. Enter your NASA Earthdata username/passw
 ## Web UI
 
 ```bash
-python -m imergpy.cli
-```
-
-If port `5000` is busy:
-
-```powershell
-$env:IMERGPY_PORT = "5001"
 python -m imergpy.cli
 ```
 
@@ -72,6 +86,12 @@ excel_path, records = imergpy.get_precipitation(
 
 print(excel_path)
 ```
+
+## Example Files
+
+- `examples/point_download.py`
+- `examples/country_japan_average.py`
+- `examples/square_area_average.py`
 
 Accepted date formats:
 
@@ -122,6 +142,14 @@ python -m build
 ```
 
 Publishing instructions are in [`PUBLISHING.md`](PUBLISHING.md).
+
+## Upgrade
+
+To upgrade to a newer `imergpy` version:
+
+```bash
+pip install --upgrade imergpy
+```
 
 ## License
 
